@@ -41,10 +41,10 @@ Generate a digital replica that thinks with your catchphrases and replies with y
 ```bash
 # Recommended: install into the default Codex skills directory
 mkdir -p ~/.codex/skills
-git clone https://github.com/notdog1998/yourself-skill ~/.codex/skills/create-yourself
+git clone https://github.com/gyz0224/yourself-skill-codex ~/.codex/skills/create-yourself
 
 # Or use a custom CODEX_HOME
-git clone https://github.com/notdog1998/yourself-skill "${CODEX_HOME:-$HOME/.codex}/skills/create-yourself"
+git clone https://github.com/gyz0224/yourself-skill-codex "${CODEX_HOME:-$HOME/.codex}/skills/create-yourself"
 ```
 
 ### Dependencies (Optional)

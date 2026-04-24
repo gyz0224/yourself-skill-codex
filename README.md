@@ -41,10 +41,10 @@
 ```bash
 # 推荐：安装到 Codex 默认 skills 目录
 mkdir -p ~/.codex/skills
-git clone https://github.com/notdog1998/yourself-skill ~/.codex/skills/create-yourself
+git clone https://github.com/gyz0224/yourself-skill-codex ~/.codex/skills/create-yourself
 
 # 或使用自定义 CODEX_HOME
-git clone https://github.com/notdog1998/yourself-skill "${CODEX_HOME:-$HOME/.codex}/skills/create-yourself"
+git clone https://github.com/gyz0224/yourself-skill-codex "${CODEX_HOME:-$HOME/.codex}/skills/create-yourself"
 ```
 
 ### 依赖（可选）

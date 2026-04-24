@@ -6,7 +6,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://python.org)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blueviolet)](https://claude.ai/code)
+[![Codex](https://img.shields.io/badge/Codex-Skill-blueviolet)](https://openai.com)
 [![AgentSkills](https://img.shields.io/badge/AgentSkills-Standard-green)](https://agentskills.io)
 
 <br>
@@ -32,17 +32,17 @@
 
 ## 安装
 
-### Claude Code
+### Codex
 
-> **重要**：Claude Code 从 **git 仓库根目录** 的 `.claude/skills/` 查找 skill。请在正确的位置执行。
+> **重要**：Codex 默认从 `$CODEX_HOME/skills` 查找 skill；如果 `CODEX_HOME` 未设置，默认目录是 `~/.codex/skills`。
 
 ```bash
-# 安装到当前项目（在 git 仓库根目录执行）
-mkdir -p .claude/skills
-git clone https://github.com/notdog1998/yourself-skill .claude/skills/create-yourself
+# 推荐：安装到 Codex 默认 skills 目录
+mkdir -p ~/.codex/skills
+git clone https://github.com/notdog1998/yourself-skill ~/.codex/skills/create-yourself
 
-# 或安装到全局（所有项目都能用）
-git clone https://github.com/notdog1998/yourself-skill ~/.claude/skills/create-yourself
+# 或使用自定义 CODEX_HOME
+git clone https://github.com/notdog1998/yourself-skill "${CODEX_HOME:-$HOME/.codex}/skills/create-yourself"
 ```
 
 ### 依赖（可选）
@@ -55,26 +55,29 @@ pip install -r requirements.txt
 
 ## 使用
 
-在 Claude Code 中输入：
+在 Codex 中输入：
 
 ```
-/create-yourself
+create-yourself
 ```
 
 按提示输入你的代号、基本信息、自我画像，然后选择数据来源。所有字段均可跳过，仅凭描述也能生成。
 
-完成后用 `/{slug}` 调用该自我 Skill，开始对话。
+完成后，直接在新对话里提到 `{slug}` 即可调用，例如：`用 {slug} 的方式回复我`。
+如果想偏向回忆/自我分析，可以说 `用 {slug} 的 self mode` 或 `memory mode`。
+如果想偏向表达风格和人格边界，可以说 `用 {slug} 的 persona mode`。
 
 ### 管理命令
 
 | 命令 | 说明 |
 |------|------|
-| `/list-selves` | 列出所有自我 Skill |
-| `/{slug}` | 调用完整 Skill（像你一样思考和说话） |
-| `/{slug}-self` | 自我档案模式（帮你回忆和分析自己） |
-| `/{slug}-persona` | 人格模式（仅性格和表达风格） |
-| `/yourself-rollback {slug} {version}` | 回滚到历史版本 |
-| `/delete-yourself {slug}` | 删除 |
+| `create-yourself` | 启动创建流程 |
+| `list-selves` | 列出所有已生成的自我 Skill |
+| `{slug}` | 调用完整 Skill（像你一样思考和说话） |
+| `{slug}` + `self mode` / `memory mode` | 偏自我档案、回忆和分析 |
+| `{slug}` + `persona mode` | 偏人格风格和表达方式 |
+| `yourself-rollback {slug} {version}` | 回滚到历史版本 |
+| `delete-yourself {slug}` | 删除 |
 
 ---
 
@@ -224,7 +227,7 @@ create-yourself/
 
 自己.skill 在此基础上将视角内转：对象不再是他人，而是你自己。致敬两位原作者的创意和开源精神。
 
-本项目遵循 [AgentSkills](https://agentskills.io) 开放标准，兼容 Claude Code 和 OpenClaw。
+本项目遵循 [AgentSkills](https://agentskills.io) 开放标准，已适配 Codex 的 `~/.codex/skills` 目录约定。
 
 ---
 

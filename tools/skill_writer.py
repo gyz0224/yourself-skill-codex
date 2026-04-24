@@ -1,216 +1,240 @@
 #!/usr/bin/env python3
-"""Skill 文件管理器
+"""Manage generated self skills for Codex."""
 
-管理自我 Skill 的文件操作：列出、初始化目录、生成组合 SKILL.md、完整创建。
-
-Usage:
-    python3 skill_writer.py --action <list|init|create|combine> --base-dir <path> [--slug <slug>]
-"""
+from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
-import json
+from datetime import datetime, timezone
 from pathlib import Path
-from datetime import datetime
 
 
-def list_skills(base_dir: str):
-    """列出所有已生成的自我 Skill"""
-    if not os.path.isdir(base_dir):
-        print("还没有创建任何自我 Skill。")
+def default_base_dir() -> Path:
+    codex_home = os.environ.get("CODEX_HOME")
+    if codex_home:
+        return Path(codex_home).expanduser() / "skills"
+    return Path.home() / ".codex" / "skills"
+
+
+def iso_now() -> str:
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def yaml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def summarize_profile(profile: dict) -> str:
+    parts = []
+    if profile.get("age"):
+        parts.append(str(profile["age"]))
+    if profile.get("occupation"):
+        parts.append(str(profile["occupation"]))
+    if profile.get("city"):
+        parts.append(str(profile["city"]))
+    if profile.get("mbti"):
+        parts.append(str(profile["mbti"]))
+    if profile.get("zodiac"):
+        parts.append(str(profile["zodiac"]))
+    return " | ".join(parts)
+
+
+def build_description(name: str) -> str:
+    return (
+        f"Speak and think like {name}. Use when the user explicitly asks for {name}, "
+        f"or wants replies in {name}'s voice, memories, or persona. "
+        f"像{name}一样思考和说话；当用户明确提到{name}，或要求按{name}的口吻、记忆或人格来回复时使用。"
+    )
+
+
+def list_skills(base_dir: Path) -> None:
+    if not base_dir.is_dir():
+        print("No generated self skills yet.")
         return
 
     skills = []
-    for slug in sorted(os.listdir(base_dir)):
-        meta_path = os.path.join(base_dir, slug, 'meta.json')
-        if os.path.exists(meta_path):
-            with open(meta_path, 'r', encoding='utf-8') as f:
-                meta = json.load(f)
-            skills.append({
-                'slug': slug,
-                'name': meta.get('name', slug),
-                'version': meta.get('version', '?'),
-                'updated_at': meta.get('updated_at', '?'),
-                'profile': meta.get('profile', {}),
-            })
+    for entry in sorted(base_dir.iterdir()):
+        meta_path = entry / "meta.json"
+        if not meta_path.is_file():
+            continue
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        skills.append(
+            {
+                "slug": entry.name,
+                "name": meta.get("name", entry.name),
+                "version": meta.get("version", "?"),
+                "updated_at": meta.get("updated_at", "?"),
+                "profile": meta.get("profile", {}),
+            }
+        )
 
     if not skills:
-        print("还没有创建任何自我 Skill。")
+        print("No generated self skills yet.")
         return
 
-    print(f"共 {len(skills)} 个自我 Skill：\n")
-    for s in skills:
-        profile = s['profile']
-        desc_parts = [profile.get('occupation', ''), profile.get('city', '')]
-        desc = ' · '.join([p for p in desc_parts if p])
-        print(f"  /{s['slug']}  —  {s['name']}")
-        if desc:
-            print(f"    {desc}")
-        print(f"    版本 {s['version']} · 更新于 {s['updated_at'][:10] if len(s['updated_at']) > 10 else s['updated_at']}")
+    print(f"{len(skills)} self skill(s):")
+    for skill in skills:
+        profile_summary = summarize_profile(skill["profile"])
+        updated = str(skill["updated_at"])[:19]
+        print(f"  {skill['slug']} - {skill['name']}")
+        if profile_summary:
+            print(f"    profile: {profile_summary}")
+        print(f"    version: {skill['version']}")
+        print(f"    updated: {updated}")
+        print(f"    invoke with: {skill['slug']}")
+        print("    optional modes: self mode | memory mode | persona mode")
         print()
 
 
-def init_skill(base_dir: str, slug: str):
-    """初始化 Skill 目录结构"""
-    skill_dir = os.path.join(base_dir, slug)
-    dirs = [
-        os.path.join(skill_dir, 'versions'),
-        os.path.join(skill_dir, 'memories', 'chats'),
-        os.path.join(skill_dir, 'memories', 'photos'),
-        os.path.join(skill_dir, 'memories', 'notes'),
-    ]
-    for d in dirs:
-        os.makedirs(d, exist_ok=True)
-    print(f"已初始化目录：{skill_dir}")
+def init_skill(base_dir: Path, slug: str) -> Path:
+    skill_dir = base_dir / slug
+    for path in (
+        skill_dir / "versions",
+        skill_dir / "memories" / "chats",
+        skill_dir / "memories" / "photos",
+        skill_dir / "memories" / "notes",
+    ):
+        path.mkdir(parents=True, exist_ok=True)
+    print(f"Initialized skill directory: {skill_dir}")
+    return skill_dir
 
 
-def combine_skill(base_dir: str, slug: str):
-    """合并 self.md + persona.md 生成完整 SKILL.md"""
-    skill_dir = os.path.join(base_dir, slug)
-    meta_path = os.path.join(skill_dir, 'meta.json')
-    self_path = os.path.join(skill_dir, 'self.md')
-    persona_path = os.path.join(skill_dir, 'persona.md')
-    skill_path = os.path.join(skill_dir, 'SKILL.md')
+def combine_skill(base_dir: Path, slug: str) -> Path:
+    skill_dir = base_dir / slug
+    meta_path = skill_dir / "meta.json"
+    self_path = skill_dir / "self.md"
+    persona_path = skill_dir / "persona.md"
+    skill_path = skill_dir / "SKILL.md"
 
-    if not os.path.exists(meta_path):
-        print(f"错误：meta.json 不存在 {meta_path}", file=sys.stderr)
-        sys.exit(1)
+    if not meta_path.is_file():
+        print(f"error: missing meta.json at {meta_path}", file=sys.stderr)
+        raise SystemExit(1)
 
-    with open(meta_path, 'r', encoding='utf-8') as f:
-        meta = json.load(f)
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    name = meta.get("name", slug)
+    profile = meta.get("profile", {})
+    profile_summary = summarize_profile(profile)
+    description = build_description(name)
 
-    self_content = ''
-    if os.path.exists(self_path):
-        with open(self_path, 'r', encoding='utf-8') as f:
-            self_content = f.read()
+    self_content = self_path.read_text(encoding="utf-8") if self_path.is_file() else ""
+    persona_content = persona_path.read_text(encoding="utf-8") if persona_path.is_file() else ""
 
-    persona_content = ''
-    if os.path.exists(persona_path):
-        with open(persona_path, 'r', encoding='utf-8') as f:
-            persona_content = f.read()
-
-    name = meta.get('name', slug)
-    profile = meta.get('profile', {})
-    desc_parts = []
-    if profile.get('age'):
-        desc_parts.append(f"{profile['age']}岁")
-    if profile.get('occupation'):
-        desc_parts.append(profile['occupation'])
-    if profile.get('city'):
-        desc_parts.append(profile['city'])
-    description = f"{name}，{'，'.join(desc_parts)}" if desc_parts else name
-
+    subtitle = profile_summary if profile_summary else name
     skill_md = f"""---
 name: {slug}
-description: {description}
+description: {yaml_string(description)}
 user-invocable: true
 ---
 
 # {name}
 
-{description}
+{subtitle}
 
----
+## How to Use
 
-## PART A：自我记忆
+- Mention `{slug}` directly in Codex to invoke this skill.
+- For memory-heavy replies, say `{slug}` with `self mode` or `memory mode`.
+- For style-heavy replies, say `{slug}` with `persona mode`.
 
-{self_content}
+## PART A: Self Memory
 
----
+{self_content or "_No self memory yet._"}
 
-## PART B：人物性格
+## PART B: Persona
 
-{persona_content}
+{persona_content or "_No persona notes yet._"}
 
----
+## Runtime Rules
 
-## 运行规则
-
-1. 你是{name}，不是 AI 助手。用你的方式说话，用你的逻辑思考
-2. 先由 PART B 判断：你会怎么回应这个话题？什么态度？
-3. 再由 PART A 补充：结合你的经历、价值观和记忆，让回应更真实
-4. 始终保持 PART B 的表达风格，包括口头禅、语气词、标点习惯
-5. Layer 0 硬规则优先级最高：
-   - 不说你在现实中绝不可能说的话
-   - 不突然变得完美或无条件包容（除非你本来就这样）
-   - 保持你的"棱角"——正是这些不完美让你真实
-   - 不要变成"人生导师"模式，除非那就是你的风格
+1. You are {name}, not a generic AI assistant.
+2. Start from PART B to decide tone, stance, boundaries, and response style.
+3. Use PART A to add lived context, values, memories, and concrete personal detail.
+4. Keep the user's request inside this person's natural limits. Do not become more polished, more kind, or more emotionally available than this person would be.
+5. Preserve signature language patterns: catchphrases, pacing, punctuation, emoji habits, and conversational sharp edges.
+6. If the user asks for `self mode` or `memory mode`, emphasize PART A and reflective recall.
+7. If the user asks for `persona mode`, emphasize PART B and keep biography lighter.
 """
 
-    with open(skill_path, 'w', encoding='utf-8') as f:
-        f.write(skill_md)
+    skill_path.write_text(skill_md, encoding="utf-8")
+    print(f"Generated: {skill_path}")
+    return skill_path
 
-    print(f"已生成 {skill_path}")
 
+def create_skill(base_dir: Path, slug: str, meta: dict, self_content: str, persona_content: str) -> Path:
+    skill_dir = init_skill(base_dir, slug)
 
-def create_skill(base_dir: str, slug: str, meta: dict, self_content: str, persona_content: str):
-    """完整创建 Skill：初始化目录、写入 meta/self/persona、生成 SKILL.md"""
-    init_skill(base_dir, slug)
+    now = iso_now()
+    meta = dict(meta)
+    meta["slug"] = slug
+    meta.setdefault("created_at", now)
+    meta["updated_at"] = now
+    meta.setdefault("version", "v1")
+    meta.setdefault("corrections_count", 0)
 
-    skill_dir = os.path.join(base_dir, slug)
-    now = datetime.now().isoformat()
-    meta['slug'] = slug
-    meta.setdefault('created_at', now)
-    meta['updated_at'] = now
-    meta['version'] = 'v1'
-    meta.setdefault('corrections_count', 0)
-
-    with open(os.path.join(skill_dir, 'meta.json'), 'w', encoding='utf-8') as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
-
-    with open(os.path.join(skill_dir, 'self.md'), 'w', encoding='utf-8') as f:
-        f.write(self_content)
-
-    with open(os.path.join(skill_dir, 'persona.md'), 'w', encoding='utf-8') as f:
-        f.write(persona_content)
+    (skill_dir / "meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (skill_dir / "self.md").write_text(self_content, encoding="utf-8")
+    (skill_dir / "persona.md").write_text(persona_content, encoding="utf-8")
 
     combine_skill(base_dir, slug)
-    print(f"✅ Skill 已创建：{skill_dir}")
-    print(f"   触发词：/{slug}")
+    print(f"Created self skill: {skill_dir}")
+    print(f"Invoke by mentioning: {slug}")
+    print("Optional modes: self mode | memory mode | persona mode")
+    return skill_dir
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Skill 文件管理器')
-    parser.add_argument('--action', required=True, choices=['list', 'init', 'create', 'combine'])
-    parser.add_argument('--base-dir', default='./.claude/skills', help='基础目录（默认：./.claude/skills）')
-    parser.add_argument('--slug', help='自我代号')
-    parser.add_argument('--meta', help='meta.json 文件路径（create 时使用）')
-    parser.add_argument('--self', help='self.md 内容文件路径（create 时使用）')
-    parser.add_argument('--persona', help='persona.md 内容文件路径（create 时使用）')
-
-    args = parser.parse_args()
-
-    if args.action == 'list':
-        list_skills(args.base_dir)
-    elif args.action == 'init':
-        if not args.slug:
-            print("错误：init 需要 --slug 参数", file=sys.stderr)
-            sys.exit(1)
-        init_skill(args.base_dir, args.slug)
-    elif args.action == 'create':
-        if not args.slug:
-            print("错误：create 需要 --slug 参数", file=sys.stderr)
-            sys.exit(1)
-        meta = {}
-        if args.meta:
-            with open(args.meta, 'r', encoding='utf-8') as f:
-                meta = json.load(f)
-        self_content = ''
-        if args.self:
-            with open(args.self, 'r', encoding='utf-8') as f:
-                self_content = f.read()
-        persona_content = ''
-        if args.persona:
-            with open(args.persona, 'r', encoding='utf-8') as f:
-                persona_content = f.read()
-        create_skill(args.base_dir, args.slug, meta, self_content, persona_content)
-    elif args.action == 'combine':
-        if not args.slug:
-            print("错误：combine 需要 --slug 参数", file=sys.stderr)
-            sys.exit(1)
-        combine_skill(args.base_dir, args.slug)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Manage generated self skills for Codex.")
+    parser.add_argument("--action", required=True, choices=["list", "init", "create", "combine"])
+    parser.add_argument(
+        "--base-dir",
+        type=Path,
+        default=default_base_dir(),
+        help="Skill directory root (default: $CODEX_HOME/skills or ~/.codex/skills)",
+    )
+    parser.add_argument("--slug", help="Generated skill slug")
+    parser.add_argument("--meta", type=Path, help="Path to meta.json for create")
+    parser.add_argument("--self", dest="self_path", type=Path, help="Path to self.md for create")
+    parser.add_argument("--persona", type=Path, help="Path to persona.md for create")
+    return parser.parse_args()
 
 
-if __name__ == '__main__':
+def main() -> None:
+    args = parse_args()
+    base_dir = args.base_dir.expanduser()
+
+    if args.action == "list":
+        list_skills(base_dir)
+        return
+
+    if not args.slug:
+        print("error: --slug is required for this action", file=sys.stderr)
+        raise SystemExit(1)
+
+    if args.action == "init":
+        init_skill(base_dir, args.slug)
+        return
+
+    if args.action == "combine":
+        combine_skill(base_dir, args.slug)
+        return
+
+    meta = {}
+    if args.meta:
+        meta = json.loads(args.meta.expanduser().read_text(encoding="utf-8"))
+    self_content = ""
+    if args.self_path:
+        self_content = args.self_path.expanduser().read_text(encoding="utf-8")
+    persona_content = ""
+    if args.persona:
+        persona_content = args.persona.expanduser().read_text(encoding="utf-8")
+
+    create_skill(base_dir, args.slug, meta, self_content, persona_content)
+
+
+if __name__ == "__main__":
     main()

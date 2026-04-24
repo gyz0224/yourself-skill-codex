@@ -1,115 +1,132 @@
 #!/usr/bin/env python3
-"""版本存档与回滚管理器
+"""Archive and restore generated self skill versions for Codex."""
 
-Usage:
-    python3 version_manager.py --action <backup|rollback|list> --slug <slug> --base-dir <path> [--version <v>]
-"""
+from __future__ import annotations
 
 import argparse
 import os
-import sys
 import shutil
-import json
+import sys
 from datetime import datetime
+from pathlib import Path
 
 
-def backup(base_dir: str, slug: str):
-    """备份当前版本"""
-    skill_dir = os.path.join(base_dir, slug)
-    versions_dir = os.path.join(skill_dir, 'versions')
-    meta_path = os.path.join(skill_dir, 'meta.json')
+def default_base_dir() -> Path:
+    codex_home = os.environ.get("CODEX_HOME")
+    if codex_home:
+        return Path(codex_home).expanduser() / "skills"
+    return Path.home() / ".codex" / "skills"
 
-    if not os.path.exists(meta_path):
-        print(f"错误：meta.json 不存在", file=sys.stderr)
-        sys.exit(1)
 
-    with open(meta_path, 'r', encoding='utf-8') as f:
-        meta = json.load(f)
+def backup(base_dir: Path, slug: str) -> str:
+    skill_dir = base_dir / slug
+    versions_dir = skill_dir / "versions"
+    meta_path = skill_dir / "meta.json"
 
-    current_version = meta.get('version', 'v0')
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_name = f"{current_version}_{timestamp}"
-    backup_dir = os.path.join(versions_dir, backup_name)
+    if not meta_path.is_file():
+        print(f"error: missing meta.json at {meta_path}", file=sys.stderr)
+        raise SystemExit(1)
 
-    os.makedirs(backup_dir, exist_ok=True)
+    current_version = "v0"
+    try:
+        import json
 
-    # 备份核心文件
-    for fname in ['self.md', 'persona.md', 'SKILL.md', 'meta.json']:
-        src = os.path.join(skill_dir, fname)
-        if os.path.exists(src):
-            shutil.copy2(src, os.path.join(backup_dir, fname))
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        current_version = str(meta.get("version", "v0"))
+    except Exception:
+        current_version = "v0"
 
-    print(f"已备份版本 {backup_name} 到 {backup_dir}")
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_name = f"{current_version}_{stamp}"
+    backup_dir = versions_dir / backup_name
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    for filename in ("self.md", "persona.md", "SKILL.md", "meta.json"):
+        source = skill_dir / filename
+        if source.is_file():
+            shutil.copy2(source, backup_dir / filename)
+
+    print(f"Backed up current version to: {backup_dir}")
     return backup_name
 
 
-def rollback(base_dir: str, slug: str, version: str):
-    """回滚到指定版本"""
-    skill_dir = os.path.join(base_dir, slug)
-    versions_dir = os.path.join(skill_dir, 'versions')
+def rollback(base_dir: Path, slug: str, version: str) -> None:
+    skill_dir = base_dir / slug
+    versions_dir = skill_dir / "versions"
 
-    # 查找匹配的版本
+    if not versions_dir.is_dir():
+        print(f"error: no versions directory at {versions_dir}", file=sys.stderr)
+        raise SystemExit(1)
+
     target_dir = None
-    for vname in os.listdir(versions_dir):
-        if vname.startswith(version) or vname == version:
-            target_dir = os.path.join(versions_dir, vname)
+    for entry in sorted(versions_dir.iterdir()):
+        if entry.is_dir() and (entry.name == version or entry.name.startswith(version)):
+            target_dir = entry
             break
 
-    if not target_dir or not os.path.isdir(target_dir):
-        print(f"错误：找不到版本 {version}", file=sys.stderr)
+    if target_dir is None:
+        print(f"error: version not found: {version}", file=sys.stderr)
         list_versions(base_dir, slug)
-        sys.exit(1)
+        raise SystemExit(1)
 
-    # 先备份当前版本
     backup(base_dir, slug)
 
-    # 恢复文件
-    for fname in ['self.md', 'persona.md', 'SKILL.md', 'meta.json']:
-        src = os.path.join(target_dir, fname)
-        dst = os.path.join(skill_dir, fname)
-        if os.path.exists(src):
-            shutil.copy2(src, dst)
+    for filename in ("self.md", "persona.md", "SKILL.md", "meta.json"):
+        source = target_dir / filename
+        if source.is_file():
+            shutil.copy2(source, skill_dir / filename)
 
-    print(f"已回滚到版本 {version}")
+    print(f"Rolled back {slug} to {target_dir.name}")
 
 
-def list_versions(base_dir: str, slug: str):
-    """列出所有版本"""
-    versions_dir = os.path.join(base_dir, slug, 'versions')
-
-    if not os.path.isdir(versions_dir):
-        print("没有历史版本。")
+def list_versions(base_dir: Path, slug: str) -> None:
+    versions_dir = base_dir / slug / "versions"
+    if not versions_dir.is_dir():
+        print("No archived versions found.")
         return
 
-    versions = sorted(os.listdir(versions_dir), reverse=True)
+    versions = sorted((entry.name for entry in versions_dir.iterdir() if entry.is_dir()), reverse=True)
     if not versions:
-        print("没有历史版本。")
+        print("No archived versions found.")
         return
 
-    print(f"历史版本（共 {len(versions)} 个）：\n")
-    for v in versions:
-        print(f"  {v}")
+    print(f"{len(versions)} archived version(s):")
+    for version in versions:
+        print(f"  {version}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description='版本管理器')
-    parser.add_argument('--action', required=True, choices=['backup', 'rollback', 'list'])
-    parser.add_argument('--slug', required=True, help='自我代号')
-    parser.add_argument('--base-dir', default='./.claude/skills', help='基础目录（默认：./.claude/skills）')
-    parser.add_argument('--version', help='回滚目标版本')
-
-    args = parser.parse_args()
-
-    if args.action == 'backup':
-        backup(args.base_dir, args.slug)
-    elif args.action == 'rollback':
-        if not args.version:
-            print("错误：rollback 需要 --version 参数", file=sys.stderr)
-            sys.exit(1)
-        rollback(args.base_dir, args.slug, args.version)
-    elif args.action == 'list':
-        list_versions(args.base_dir, args.slug)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Archive and restore self skill versions for Codex.")
+    parser.add_argument("--action", required=True, choices=["backup", "rollback", "list"])
+    parser.add_argument("--slug", required=True, help="Generated skill slug")
+    parser.add_argument(
+        "--base-dir",
+        type=Path,
+        default=default_base_dir(),
+        help="Skill directory root (default: $CODEX_HOME/skills or ~/.codex/skills)",
+    )
+    parser.add_argument("--version", help="Version name or prefix for rollback")
+    return parser.parse_args()
 
 
-if __name__ == '__main__':
+def main() -> None:
+    args = parse_args()
+    base_dir = args.base_dir.expanduser()
+
+    if args.action == "backup":
+        backup(base_dir, args.slug)
+        return
+
+    if args.action == "list":
+        list_versions(base_dir, args.slug)
+        return
+
+    if not args.version:
+        print("error: --version is required for rollback", file=sys.stderr)
+        raise SystemExit(1)
+
+    rollback(base_dir, args.slug, args.version)
+
+
+if __name__ == "__main__":
     main()

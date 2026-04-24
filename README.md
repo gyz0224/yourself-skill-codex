@@ -2,6 +2,8 @@
 
 # 自己.skill
 
+> **说明**：本仓库是基于原作者 [notdog1998/yourself-skill](https://github.com/notdog1998/yourself-skill) 的 **Claude Code 版本**改造而来的 **Codex 版本**。当前内容以 Codex 的 skill 目录约定、触发方式和生成流程为准。
+
 > *"与其蒸馏别人，不如蒸馏自己。欢迎加入数字永生！"*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

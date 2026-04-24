@@ -2,6 +2,8 @@
 
 # Yourself.skill
 
+> **Note**: This repository is a **Codex adaptation** of the original **Claude Code version** by [notdog1998/yourself-skill](https://github.com/notdog1998/yourself-skill). The current docs and workflow follow Codex conventions for skill discovery, invocation, and generation.
+
 > *"Why distill others when you can distill yourself? Welcome to digital life."*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
